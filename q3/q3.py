@@ -85,7 +85,7 @@ class State:
 count = 0
 
 
-@lru_cache(maxsize = None)
+# @lru_cache(maxsize = None)
 def tree(state, depth):
     global total
     global t2
