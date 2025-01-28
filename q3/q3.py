@@ -1,58 +1,69 @@
 import copy
-import time
-import timeit
 from functools import lru_cache
+import time
 
-f = int(input())
-farr = input().split(" ")
+# f = int(input())
+# farr = input().split(" ")
+# farr = [int(i) for i in farr]
 
-farr = [int(i) for i in farr]
+f = 4
+farr = [1483., 1801., 3407., 4999.]
+# farr = [1., 1., 1., 1.]
 
-# f = 4
-# farr = [4999, 434, 483, 4920]
+# f = 3
+# farr = [7., 14., 14.]
+# farr = [100., 100., 100.]
 
-start = time.time()
+# f = 2
+# farr = [1, 3]
+
+errorcheck = set()
+
+truetotal = time.time()
 total = 0
 
-# # print(farr)
-
-# time = timeit.timeit()
 
 class State:
     fuses = []
     time = 0
     fusesLit = []
 
-    # def __eq__(self, other):
-    #     if self.fuses == other.fuses and self.time == other.time and self.fusesLit == other.fusesLit:
-    #         return True
-
-    def __init__(self, time, fuses, fusesLit):
+    def __init__(self, time, fuses, fusesLit, record):
         self.fuses = fuses
         self.time = time
+
+        # 0 = unlit, 1 = lit one end, 2 = lit both
         self.fusesLit = fusesLit
 
+        # debug statement, ignore
+        self.record = record
+
     def update(self):
+        start = time.time()
+
+        # copy.deepcopy avoids bugs with passing by reference
+        # yes I know python is bad
         timeLeft = copy.deepcopy(self.fuses)
 
         for i in range(len(self.fusesLit)):
             if self.fusesLit[i] == 0:
-#                 # print(i, timeLeft)
-                timeLeft[i] = 9999
+                # makes it unpickable
+                timeLeft[i] = 99999
             if self.fusesLit[i] == 2:
                 timeLeft[i] = timeLeft[i] / 2
             if timeLeft[i] <= 0:
                 timeLeft[i] = None
 
+
+        # convoluted way to remove all None from timeLeft without indexing issues
         j = 0
         for i in range(len(timeLeft)):
-
-            if timeLeft[i-j] is None:
-                timeLeft.pop(i-j)
+            if timeLeft[i - j] is None:
+                timeLeft.pop(i - j)
                 j += 1
 
+        # picks shortest time until next fuse burns out
         timePassed = min(timeLeft)
-        # print("IMPORTANT", self.time, timePassed, timeLeft)
 
         newFuses = []
         for i in range(len(self.fuses)):
@@ -64,50 +75,67 @@ class State:
             newFuses.append(self.fuses[i] - val)
             newFuses[-1] = max(newFuses[-1], 0)
 
-#         # print(newFuses)
-        #
+        self.record.append(
+            [timePassed, self.time, self.fusesLit, self.fuses]
+        )
+
+        global total
+        total += time.time() - start
+
         if max(newFuses) <= 0:
-#             print(f"TIME IS {self.time}")
+            # I'm keeping this in case I need to examine the breakdown of a time
+
+            # print(f"TIME IS {self.time}")
+            # if self.time + timePassed not in errorcheck:
+            #     print()
+            #     print(self.time + timePassed)
+            #     for i in self.record:
+            #         print(i, len(self.record))
+            #     errorcheck.add(self.time + timePassed)
             return self.time + timePassed, None
 
+        # If the timer has started, then the timer cannot be stopped - it only stops at the end.
+        # Remember, no adding together non-consective time periods!
+        if self.time > 0:
+            return (State(
+                self.time + timePassed,
+                newFuses,
+                self.fusesLit,
+                self.record
+            ), None
+            )
+
+        # Two possible ways for this to go - timer is started or not
         return (State(
             self.time + timePassed,
             newFuses,
-            self.fusesLit
+            self.fusesLit,
+            self.record
         ),
-            State(
-                self.time,
-                newFuses,
-                self.fusesLit
-            )
+                State(
+                    self.time,
+                    newFuses,
+                    self.fusesLit,
+                    self.record
+                )
         )
+
 
 count = 0
 
 
-# @lru_cache(maxsize = None)
 def tree(state, depth):
-    global total
-    global t2
-    # total += time.time() - t2
-    # t = time.time()
-
-#     print(f"depth is {depth}")
+    if state is None:
+        return {0.}
+    if isinstance(state, float) or isinstance(state, int):
+        return {state}
     ans = set()
-    if depth is False:
-        newstate1, newstate2 = state, 1
-    else:
-        # t = time.time()
-        newstate1, newstate2 = state.update()
-        # total += time.time() - t
-        if newstate2 is None:
-            return {newstate1}
-#         print(f"info is {newstate1.fuses, newstate2.fuses, newstate1.fusesLit, newstate2.fusesLit}")
 
-#     print(f"states are {newstate1, newstate2}")
     global count
     count += 1
 
+    # Neat little recursive thing that gens all possible combinations of fuses lit
+    # Please don't investigate how this actually works
     def possLit(arr, ans):
         if len(arr) == 0:
             return [ans]
@@ -119,80 +147,45 @@ def tree(state, depth):
                 break
         return sumarr
 
+    possArr = possLit(copy.deepcopy(state.fusesLit), [])
 
-# t = time.time()
-    possArr = possLit(newstate1.fusesLit, [])
-    # total += time.time() - t
-    if depth is False:
+    if depth == 0:
         possArr.pop(0)
-#     print(f"possArr is {possArr}")
-#     total += time.time() - t
-    # if depth is False:
-    for poss in possArr:
-        # t = time.time()
-        newstate = State(newstate1.time, newstate1.fuses, newstate1.fusesLit)
-        newstate.fusesLit = poss
-        # total += time.time() - t
 
-        t = time.time()
-        tf = newstate.update()[1] is not None
-        total += time.time() - t
-        if tf:
+    for poss in possArr:
+        newstate = copy.deepcopy(state)
+        newstate.fusesLit = poss
+        updatedstate = newstate.update()
+
+        # This is going to earn me an insane amount of mockery, and I fully accept it: this is garbage.
+        # If the returned tuple is (State, State), two tree calls.
+        # If returned tuple is (int, None), all fuses have burnt out, call tree with the int so tree saves it to ans.
+        # If returned tuple is (State, None), one tree call.
+        # Yes it's mind-bendingly stupid
+        if isinstance(updatedstate[0], State):
+            # Checks if any fuses actually burn in an update - if not, ignore
             useless = True
-            for i, thing in enumerate(poss):
-                if thing > 0 and newstate1.fuses[i] > 0:
+            for i, fuseLit in enumerate(poss):
+                if fuseLit > 0 and state.fuses[i] > 0:
                     useless = False
             if not useless:
-                # t2 = time.time()
-                ans.update(tree(newstate, True))
+                if isinstance(updatedstate[1], State):
+                    ans.update(tree(updatedstate[0], depth + 1))
+                    ans.update(tree(updatedstate[1], depth + 1))
+                else:
+                    ans.update(tree(updatedstate[0], depth + 1))
         else:
-            # t2 = time.time()
-            ans.update(tree(newstate, True))
-
-        # val = tree(newstate)
-        # ans.update(tree(newstate, depth + 1))
-        if newstate2 != 1:
-            # t = time.time()
-            newstate = State(newstate2.time, newstate2.fuses, newstate2.fusesLit)
-            newstate.fusesLit = poss
-            # total += time.time() - t
-            t = time.time()
-            tf = newstate.update()[1] is not None
-            total += time.time() - t
-            if tf:
-                # t = time.time()
-                useless = True
-                for i, thing in enumerate(poss):
-                    if thing > 0 and newstate1.fuses[i] > 0:
-                        useless = False
-                # total += time.time() - t
-                if not useless:
-                    # t2 = time.time()
-                    ans.update(tree(newstate, True))
-            else:
-                # t2 = time.time()
-                ans.update(tree(newstate, True))
-
-    # total += time.time() - t
+            ans.update(tree(updatedstate[0], depth + 1))
     return ans
 
-# t2 = time.time()
-ans = tree(State(0, farr, [0 for i in range(len(farr))]), 0)
-ans.add(0)
 
-# print(count)
+ans = tree(State(0., farr, [0 for i in range(len(farr))], []), 0)
+ans.add(0.)
+
+print(time.time() - truetotal)
+print(total)
+
 print(len(ans))
-# print(total)EE
-# print(timeit.timeit("""ans = tree(State(0, farr, [0 for i in range(len(farr))]), 0)
-# ans.add(0)
-#
-# print(count)EE
-# print(len(ans))"""))
-
-# print(time.time() - start)  EE
-
-# # print(possLit([0, 0, 0, 0], []))
-
 
 
 
